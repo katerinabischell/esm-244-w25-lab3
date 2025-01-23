@@ -1,6 +1,6 @@
 ---
 title: "Lab 3 Key"
-author: "Nathaniel Grimes"
+author: "Katerina Bischel"
 format: html
 ---
 ## Load in data and packages
@@ -17,9 +17,17 @@ t_df<-read_csv(here("data", "titanic_survival.csv"))
 ## ML Framework
 
 Write a description of how you go about applying machine learning problems. If you drew a diagram, share with a neighbor and discuss.
-
-
-
+**1. Research Question**
+**2. Data Exploration/Cleaning**
+**3. Data Split**
+**4. Build Models**
+*a. Data Preprocessing*
+*b. Train Model*
+*c. Tune*
+*d. Evaluate Performance*
+*e. Model Selection*
+**5. Finzalize Model**
+**6. Interpret and Visualize Results**
 
 ## Tidymodels Overview
 
@@ -41,14 +49,85 @@ In real life, we would have to go out and collect the data. Today, we will use t
 
 Take 15 minutes to explore the data. Are there any immediate changes to the data that we need to change? What relationships can you see through graphs? What variables could be of interest to predict survival of passengers on the Titanic?
 
+The 'survived' column tells us if the passenger (1) survived or (0) died. The columns that will help predict which ones survived are 'pclass', 'sex', 'age', and 'cabin'. The big relationship I am seeing is that a lot of the passengers do not have cabins "NA" and most of the ones that survived (1) have cabin assignments - this makes me assume that the rich passengers have a higher survival rate since the ones that did not have assigned cabins are probably workers. Another correlation I am noticing is that the female passenders have had a higher survival rate. I am not sure that the 'ticket' column stands for. 
 
+```{r}
+sex_df <- t_df |> # this df shows us that 233 females survived and only 109 males survived. 
+  select(survived, sex) |> 
+  group_by(survived, sex) |> 
+  summarise(count = n(), .groups = "drop") |>  # Count the number of males and females for each survived category
+  pivot_wider(names_from = sex, values_from = count, values_fill = 0)
+
+t_df |> 
+  select(survived, sex) |> 
+  group_by(survived, sex) |> 
+  summarise(count = n(), .groups = "drop") |> 
+  ggplot(aes(x = factor(survived), y = count, fill = sex)) +
+  geom_bar(stat = "identity", position = "stack") +
+  labs(x = "Survived", y = "Count", fill = "Sex",
+       title = "Survival Counts by Sex") +
+  theme_minimal()
+
+```
+
+
+```{r}
+age_df <- t_df |> # this shows that the only category that survived more than died are children
+  mutate(age_group = cut(age, breaks = c(0, 12, 18, 35, 60, Inf), 
+                         labels = c("Child", "Teen", "Young Adult", "Adult", "Senior"), 
+                         right = FALSE)) |> 
+  group_by(survived, age_group) |> 
+  summarise(count = n(), .groups = "drop")
+
+age_df |> 
+  ggplot(aes(x = age_group, y = count, fill = factor(survived))) +
+  geom_bar(stat = "identity", position = "stack") +
+  labs(x = "Age Group", y = "Count", fill = "Survived",
+       title = "Survival Counts by Age Group") +
+  theme_minimal()
+
+```
+
+
+```{r}
+sac_df <- t_df |> #this one is just looking at the following columns: survived, sex, age, and cabin
+  select(survived, sex, age, cabin) |> 
+  group_by(survived)
+```
+
+```{r}
+p_class <- t_df |> 
+  group_by(pclass) |> 
+  summarise(
+    survival_rate = mean(survived, na.rm = TRUE),
+    total_count = n(),
+    .groups = "drop")
+
+```
+
+
+```{r}
+surv_df <- t_df %>%
+  mutate(survived = factor(survived),   ### categorical outcome variables need to be factors
+         pclass   = factor(pclass)) %>% ### turn some predictors to factor
+  select(-cabin, -ticket) ### lots of NAs here - and not likely to be very helpful
+```
+
+```{r}
+ggplot(surv_df, aes(x = pclass, fill = survived)) +
+  geom_bar()
+```
+
+```{r}
+ggplot(surv_df, aes(x = age, fill = survived)) +
+  geom_histogram()
+```
 
 ## Data Split
 
 We will set aside (“partition”) a portion of the data for building and comparing our models (80%), and a portion for testing our models after we’ve selected the best one (20%). NOT the same as folds - that will happen in the training/validation step.
 
 ```{r}
-### Check balance of survived column
 surv_df %>%
   group_by(survived) %>%
   summarize(n = n()) %>%
